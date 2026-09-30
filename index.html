@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Account Generator</title>
+  <style>
+    :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#6b7280; --accent:#2563eb; --border:#e5e7eb; --code:#0f172a; --codetext:#e2e8f0; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0b0f17; --card:#141a24; --text:#e5e7eb; --muted:#9ca3af; --accent:#3b82f6; --border:#253043; --code:#05080d; }
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width:760px; margin:40px auto; padding:0 16px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:24px; }
+    h1 { margin:0 0 4px; font-size:1.5rem; }
+    p.sub { margin:0 0 20px; color:var(--muted); }
+    .row { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom:16px; }
+    label { color:var(--muted); }
+    input[type=number] { width:90px; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text); font:inherit; }
+    button { padding:9px 16px; border:0; border-radius:8px; background:var(--accent); color:#fff; font:inherit; cursor:pointer; }
+    button.secondary { background:transparent; color:var(--text); border:1px solid var(--border); }
+    button:disabled { opacity:.5; cursor:wait; }
+    pre { margin:0; background:var(--code); color:var(--codetext); padding:16px; border-radius:8px; overflow:auto; max-height:60vh; font:14px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+    #status { color:var(--muted); font-size:.9rem; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <h1>Random Account Generator</h1>
+    <p class="sub">email @gmail.com · password 16 ตัว (a-z, A-Z, 0-9, อักษรพิเศษ) · สุ่ม a-z 10 ตัว x2 — รัน Python ในเบราว์เซอร์ผ่าน Pyodide</p>
+    <div class="row">
+      <label for="count">จำนวน</label>
+      <input id="count" type="number" min="1" max="1000" value="1">
+      <button id="gen" disabled>Generate</button>
+      <button id="copy" class="secondary" disabled>Copy JSON</button>
+      <button id="download" class="secondary" disabled>Download .json</button>
+      <span id="status">กำลังโหลด Python…</span>
+    </div>
+    <pre id="out">{}</pre>
+  </div>
+</main>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  let pyodide;
+
+  async function init() {
+    try {
+      pyodide = await loadPyodide();
+      const src = await (await fetch("account_generator.py", { cache: "no-cache" })).text();
+      pyodide.FS.writeFile("account_generator.py", src);
+      pyodide.runPython("import account_generator");
+      ["gen", "copy", "download"].forEach((id) => ($(id).disabled = false));
+      $("status").textContent = "พร้อมใช้งาน";
+      generate();
+    } catch (err) {
+      $("status").textContent = "โหลดไม่สำเร็จ: " + err;
+    }
+  }
+
+  function generate() {
+    const n = Math.min(1000, Math.max(1, parseInt($("count").value, 10) || 1));
+    $("count").value = n;
+    pyodide.globals.set("n", n);
+    $("out").textContent = pyodide.runPython("account_generator.generate_json(n)");
+  }
+
+  $("gen").onclick = generate;
+  $("copy").onclick = async () => {
+    await navigator.clipboard.writeText($("out").textContent);
+    $("status").textContent = "คัดลอกแล้ว";
+  };
+  $("download").onclick = () => {
+    const blob = new Blob([$("out").textContent], { type: "application/json" });
+    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "accounts.json" });
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  init();
+</script>
+</body>
+</html>
